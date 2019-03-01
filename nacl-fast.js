@@ -2374,4 +2374,90 @@ nacl.setPRNG = function(fn) {
   }
 })();
 
+//new functions for CN - scalar operations are handled externally
+// this only handles curve operations, except for Hp()
+
+//why do we negate points when unpacking them???
+function ge_neg(pub) {
+  pub[31] ^= 0x80;
+}
+
+//res = s*G
+function ge_scalarmult_base(s) {
+  var p = [gf(), gf(), gf(), gf()];
+  scalarbase(p, s);
+  var pk = new Uint8Array(32);
+  pack(pk, p);
+  return pk;
+}
+
+//res = s*P
+function ge_scalarmult(P, s) {
+  var p = [gf(), gf(), gf(), gf()],
+  upk = [gf(), gf(), gf(), gf()],
+  res = new Uint8Array(32);
+  ge_neg(P);
+  if (unpackneg(upk, P) !== 0) throw "non-0 error on point decode";
+  scalarmult(p, upk, s);
+  pack(res, p);
+  return res;
+}
+
+//res = c*P + r*G
+function ge_double_scalarmult_base_vartime(c, P, r) {
+  var uP = [gf(), gf(), gf(), gf()],
+  cP = [gf(), gf(), gf(), gf()],
+  rG = [gf(), gf(), gf(), gf()],
+  res = new Uint8Array(32);
+  ge_neg(P);
+  if (unpackneg(uP, P) !== 0) throw "non-0 error on point decode";
+  scalarmult(cP, uP, c);
+  scalarbase(rG, r);
+  add(rG, cP);
+  pack(res, rG);
+  return res;
+}
+
+//name changed to reflect not using precomp; res = r*Pb + c*I
+function ge_double_scalarmult_postcomp_vartime(r, Pb, c, I) {
+  var uPb = [gf(), gf(), gf(), gf()],
+  uI = [gf(), gf(), gf(), gf()],
+  cI = [gf(), gf(), gf(), gf()],
+  rPb = [gf(), gf(), gf(), gf()],
+  res = new Uint8Array(32);
+  ge_neg(Pb);
+  if (unpackneg(uPb, Pb) !== 0) throw "non-0 error on point decode";
+  scalarmult(rPb, uPb, r);
+  ge_neg(I);
+  if (unpackneg(uI, I) !== 0) throw "non-0 error on point decode";
+  scalarmult(cI, uI, c);
+  add(rPb, cI);
+  pack(res, rPb);
+  return res;
+}
+
+//res = P + Q
+function ge_add(P, Q) {
+  var uP = [gf(), gf(), gf(), gf()],
+  uQ = [gf(), gf(), gf(), gf()],
+  res = new Uint8Array(32);
+  ge_neg(P);
+  ge_neg(Q);
+  if (unpackneg(uP, P) !== 0) throw "non-0 error on point decode";
+  if (unpackneg(uQ, Q) !== 0) throw "non-0 error on point decode";
+  add(uP, uQ);
+  pack(res, uP);
+  return res;
+}
+
+nacl.ll = {
+
+  ge_scalarmult_base: ge_scalarmult_base,
+  ge_scalarmult: ge_scalarmult,
+  ge_double_scalarmult_base_vartime: ge_double_scalarmult_base_vartime,
+  ge_add: ge_add,
+  ge_double_scalarmult_postcomp_vartime: ge_double_scalarmult_postcomp_vartime
+
+};
+
 })(typeof module !== 'undefined' && module.exports ? module.exports : (self.nacl = self.nacl || {}));
